@@ -148,7 +148,7 @@ class BaseTransformer(pl.LightningModule):
     def get_progress_bar_dict(self):
         running_train_loss = self.trainer.running_loss.mean()
         avg_training_loss = running_train_loss.cpu().item() if running_train_loss is not None else float('NaN')
-        tqdm_dict = {"loss": "{:.3f}".format(avg_training_loss), "lr": self.lr_scheduler.get_last_lr()[-1]}
+        tqdm_dict = {"Training loss": "{:.3f}".format(avg_training_loss), "lr": self.lr_scheduler.get_last_lr()[-1]}
         return tqdm_dict
 
     def _feature_file(self, mode):
@@ -163,6 +163,26 @@ class BaseTransformer(pl.LightningModule):
 
 
 class LoggingCallback(pl.Callback):
+    def on_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
+        logger.info("***** Epoch Results *****")
+        if pl_module.is_logger():
+            metrics = trainer.callback_metrics
+            # Log results
+            epoch = metrics['epoch']
+            output_test_results_file = os.path.join(pl_module.hparams.output_dir, f"info_{epoch}.txt")
+            with open(output_test_results_file, "w") as writer:
+                for key in sorted(metrics):
+                    if key not in ["log", "progress_bar"]:
+                        val = metrics[key]
+                        if isinstance(val, torch.Tensor):
+                            val = val.cpu().detach().numpy()
+                        else:
+                            val = str(val)
+                        writer.write("{} = {}".format(key, val))
+                        writer.write('\n')
+                        logger.info("{} = {}".format(key, str(metrics[key])))
+            writer.close()
+
     def on_validation_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
         logger.info("***** Validation results *****")
         if pl_module.is_logger():
@@ -182,8 +202,14 @@ class LoggingCallback(pl.Callback):
             with open(output_test_results_file, "w") as writer:
                 for key in sorted(metrics):
                     if key not in ["log", "progress_bar"]:
+                        val = metrics[key]
+                        if isinstance(val, torch.Tensor):
+                            val = val.cpu().detach().numpy()
+                        else:
+                            val = str(val)
                         logger.info("{} = {}".format(key, str(metrics[key])))
-                        writer.write("{} = {}".format(key, str(metrics[key])))
+                        writer.write("{} = {}".format(key, val))
+                        writer.write("\n")
 
 
 def add_args(parser):

@@ -4,8 +4,6 @@ import logging
 import os
 import sys
 import time
-from collections import defaultdict
-from pathlib import Path
 
 import torch
 
@@ -23,11 +21,8 @@ class BARTQA(BaseTransformer):
 
     def __init__(self, hparams):
         super().__init__(hparams, mode=self.mode)
-        
-        # self.metrics_save_path = Path(self.hparams.output_dir) / "metrics.json"
-        # self.hparams_save_path = Path(self.hparams.output_dir) / "hparams.pkl"
+
         self.step_count = 0
-        self.metrics = defaultdict(list)
 
         self.dataset_kwargs: dict = dict(
             data_dir=self.hparams.data_dir,
@@ -55,7 +50,8 @@ class BARTQA(BaseTransformer):
 
     def training_step(self, batch, batch_idx):
         loss = self._step(batch)
-        return {"loss": loss}
+        tensorboard_logs = {"train_loss": loss}
+        return {"train_loss": loss, "log": tensorboard_logs}
 
     def validation_step(self, batch, batch_idx):
         # repetition_penalty = 2.5,
@@ -102,14 +98,12 @@ class BARTQA(BaseTransformer):
 
     def validation_end(self, outputs):
         avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
-        return {"avg_val_loss": avg_loss}
-
-    def check_validation_end(self, outputs):
-        avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
-        return {"avg_val_loss": avg_loss}
+        tensorboard_logs = {"val_loss": avg_loss}
+        return {"val_loss": avg_loss, "log": tensorboard_logs}
 
     def test_end(self, outputs):
-        return self.validation_end(outputs)
+        avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
+        return {"val_loss": avg_loss}
 
     def test_epoch_end(self, outputs):
         if "preds" in outputs[0]:
@@ -129,50 +123,46 @@ class BARTQA(BaseTransformer):
             logger.info("valid epoch: %s", self.count_valid_epoch)
 
             self.count_valid_epoch += 1
-
         else:
             logger.info('not in')
 
-        return self.check_validation_end(outputs)
+        avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
+        tensorboard_logs = {"val_loss": avg_loss}
+        return {"val_loss": avg_loss, "log": tensorboard_logs}
 
-    def validation_epoch_end(self, outputs, prefix="val"):
+    def validation_epoch_end(self, outputs):
         self.step_count += 1
 
         if "preds" in outputs[0]:
-            output_test_predictions_file = os.path.join(self.hparams.output_dir, "validation_predictions_" +
-                                                        str(self.count_valid_epoch) + ".txt")
-            output_test_targets_file = os.path.join(self.hparams.output_dir, "validation_targets_" +
-                                                    str(self.count_valid_epoch) + ".txt")
-            with open(output_test_predictions_file, "w") as p_writer, open(output_test_targets_file,
-                                                                           "w") as t_writer:
-                for output_batch in outputs:
-                    p_writer.writelines(convert_text(s) + "\n" for s in output_batch["preds"])
-                    t_writer.writelines(convert_text(s) + "\n" for s in output_batch["target"])
-                p_writer.close()
-                t_writer.close()
+            # output_test_predictions_file = os.path.join(self.hparams.output_dir, "validation_predictions_" +
+            #                                             str(self.count_valid_epoch) + ".txt")
+            # output_test_targets_file = os.path.join(self.hparams.output_dir, "validation_targets_" +
+            #                                         str(self.count_valid_epoch) + ".txt")
+            # with open(output_test_predictions_file, "w") as p_writer, open(output_test_targets_file,
+            #                                                                "w") as t_writer:
+            #     for output_batch in outputs:
+            #         p_writer.writelines(convert_text(s) + "\n" for s in output_batch["preds"])
+            #         t_writer.writelines(convert_text(s) + "\n" for s in output_batch["target"])
+            #     p_writer.close()
+            #     t_writer.close()
 
-            metrics = {}
-            metrics["step_count"] = self.step_count
             logger.info("valid epoch: %s", self.count_valid_epoch)
             avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
+            metrics = {"val_loss": avg_loss}
             self.count_valid_epoch += 1
         else:
             logger.info('not in')
             avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
 
-        return {"avg_val_loss": avg_loss, "log": metrics}
+        return {"val_loss": avg_loss, "log": metrics}
 
-    def train_epoch_end(self, outputs, prefix='train'):
+    def train_epoch_end(self, outputs):
         avg_loss = torch.stack([x["train_loss"] for x in outputs]).mean()
         output_train_info_file = os.path.join(self.hparams.output_dir, "train_info_" +
                                               str(self.count_valid_epoch) + ".txt")
         with open(output_train_info_file, "w") as writer:
             writer.write(avg_loss + "\n")
             writer.close()
-
-    # def save_metrics(self, latest_metrics, type_path):
-    #     self.metrics[type_path].append(latest_metrics)
-    #     save_json(self.metrics, self.metrics_save_path)
 
 
 def main(args):
