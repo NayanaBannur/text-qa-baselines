@@ -51,7 +51,7 @@ class BARTQA(BaseTransformer):
     def training_step(self, batch, batch_idx):
         loss = self._step(batch)
         tensorboard_logs = {"train_loss": loss}
-        return {"train_loss": loss, "log": tensorboard_logs}
+        return {"loss": loss, "log": tensorboard_logs}
 
     def validation_step(self, batch, batch_idx):
         # repetition_penalty = 2.5,
@@ -119,9 +119,7 @@ class BARTQA(BaseTransformer):
                     t_writer.writelines(convert_text(s) + "\n" for s in output_batch["target"])
                 p_writer.close()
                 t_writer.close()
-
             logger.info("valid epoch: %s", self.count_valid_epoch)
-
             self.count_valid_epoch += 1
         else:
             logger.info('not in')
@@ -148,11 +146,11 @@ class BARTQA(BaseTransformer):
 
             logger.info("valid epoch: %s", self.count_valid_epoch)
             avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
-            metrics = {"val_loss": avg_loss}
             self.count_valid_epoch += 1
         else:
             logger.info('not in')
             avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
+        metrics = {"val_loss": avg_loss}
 
         return {"val_loss": avg_loss, "log": metrics}
 

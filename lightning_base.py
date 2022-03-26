@@ -84,18 +84,6 @@ class BaseTransformer(pl.LightningModule):
         """Prepare optimizer and schedule (linear warmup and decay)"""
 
         model = self.model
-        # no_decay = ["bias", "LayerNorm.weight"]
-        # optimizer_grouped_parameters = [
-        #     {
-        #         "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-        #         "weight_decay": self.hparams.weight_decay,
-        #     },
-        #     {
-        #         "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
-        #         "weight_decay": 0.0,
-        #     },
-        # ]
-        # optimizer = AdamW(optimizer_grouped_parameters, lr=self.hparams.learning_rate, eps=self.hparams.adam_epsilon)
         optimizer = AdamW([p for n, p in model.named_parameters()],
                           lr=self.hparams.learning_rate, eps=self.hparams.adam_epsilon)
         self.opt = optimizer
@@ -109,9 +97,6 @@ class BaseTransformer(pl.LightningModule):
             optimizer.step()
         optimizer.zero_grad()
         self.lr_scheduler.step()
-
-    def test_step(self, batch, batch_nb):
-        return self.validation_step(batch, batch_nb)
 
     def get_dataloader(self, filepath: str, batch_size: int, split: str,
                        shuffle: bool = False) -> DataLoader:
@@ -243,7 +228,7 @@ def add_args(parser):
     parser.add_argument("--train_batch_size", default=32, type=int)
     parser.add_argument("--eval_batch_size", default=32, type=int)
     parser.add_argument("--test_batch_size", default=512, type=int)
-    parser.add_argument("--max_source_length", default=384, type=int,
+    parser.add_argument("--max_source_length", default=512, type=int,
                         help="The maximum total input sequence length after tokenization."
                              "Sequences longer than this will be truncated, sequences shorter will be padded.")
     parser.add_argument("--max_target_length", default=512, type=int,
@@ -254,7 +239,6 @@ def add_args(parser):
                         help="-1 means never early stop. early_stopping_patience is measured in validation checks, "
                              "not epochs."
                              "So val_check_interval will effect it.")
-    parser.add_argument("--checkpoint", default=None, type=str, help="The checkpoint to initialize model.")
     parser.add_argument("--checkpoint_model", default=None, type=str, help="The checkpoint to initialize model.")
     return parser
 
